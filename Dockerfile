@@ -1,4 +1,4 @@
-FROM  nvcr.io/nvidia/tensorflow:20.03-tf2-py3
+FROM cyversevice/base-notebook-opengl:latest 
 
 USER root
 
@@ -17,7 +17,8 @@ RUN apt-get update && apt-get install -y \
     nodejs \
     python-requests \
     software-properties-common \
-    vim
+    vim \
+    wget
    
 # iCommands
 RUN wget -qO - https://packages.irods.org/irods-signing-key.asc | apt-key add - \
@@ -29,11 +30,11 @@ RUN wget -qO - https://packages.irods.org/irods-signing-key.asc | apt-key add - 
 #    && jupyter serverextension enable --py jupyterlab_irods \
 #    && jupyter labextension install ijab
 
+USER ${NB_USER}
+WORKDIR /home/${NB_USER}
+
 # install jupyterlab hub-extension, lab-manager, bokeh
-RUN jupyter lab --version \
-    && jupyter labextension install @jupyterlab/hub-extension \
-                                    @jupyter-widgets/jupyterlab-manager \
-                                    jupyterlab_bokeh 
+RUN jupyter labextension install @jupyter-widgets/jupyterlab-manager 
 
 # install jupyterlab git extension
 RUN jupyter labextension install @jupyterlab/git && \
@@ -43,18 +44,30 @@ RUN jupyter labextension install @jupyterlab/git && \
 # install jupyterlab github extension
 RUN jupyter labextension install @jupyterlab/github
 
+# Install Tensorflow & Keras
+RUN pip install --quiet --no-cache-dir \
+    'tensorflow-gpu==2.2.0' \
+    'h5py==2.10.0' \
+    'pyyaml==5.3.1' \
+    'requests==2.23.0' \
+    'Pillow==7.1.2' \
+    'keras==2.3.1' 
+RUN fix-permissions "${CONDA_DIR}" \
+    && fix-permissions "/home/${NB_USER}"
+
 # Install and configure jupyter lab.
 COPY jupyter_notebook_config.json /opt/conda/etc/jupyter/jupyter_notebook_config.json
 
 # Add the jovyan user to UID 1000
-RUN groupadd jovyan && usermod -aG jovyan jovyan && usermod -d /home/jovyan -u 1000 jovyan
-RUN chown -R jovyan:jovyan /home/jovyan
-USER jovyan
-WORKDIR /home/jovyan
+#RUN groupadd jovyan && usermod -aG jovyan jovyan && usermod -d /home/jovyan -u 1000 jovyan
+#RUN chown -R jovyan:jovyan /home/jovyan
 
 EXPOSE 8888
 
 COPY entry.sh /bin
-RUN mkdir -p /home/jovyan/.irods
+RUN mkdir -p /home/${NB_USER}/.irods
+
+CMD source /opt/conda/etc/profile.d/conda/sh \
+    && conda activate base
 
 ENTRYPOINT ["bash", "/bin/entry.sh"] 
